@@ -1,6 +1,6 @@
-require('static_data')();
+HeadLength = 4;//Max Support 4
+Client = null;
 require('extensions')();
-io = require('game_socket');
 
 //****************redis****************//
 if(true){
@@ -37,6 +37,7 @@ else{
 var net = require('net');
 var data_buffer = require('data_buffer');
 var logics = require('./logics');
+var io = require('game_socket');
 
 
 var PORT = 18080;

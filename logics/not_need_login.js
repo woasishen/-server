@@ -1,67 +1,44 @@
-var encrypt = require('./encrypt');
+function Add(key, socket, msg, msgId){
+    msg.time = Date.now();
+    Client.lpush(key, JSON.stringify(msg),
+        function (err, data) {
+            if(err){
+                return;
+            }
+            socket.broadcast(msgId, msg);
+        }
+    );
+}
+
+function Delete(key, socket, msg, msgId){
+    Client.lindex(key, 0, function (err, data) {
+        if(data){
+            var eatMsg = json.parse(data);
+            if (Date.now() - eatMsg.time > DeleteLimitTime * 1000){
+                socket.send(msgId, {error: "delete can only execute in " + DeleteLimitTime + " seconds!!"});
+                return;
+            }
+            Client.lpop(EatKey, function (err, data) {
+                if(err){
+                    return;
+                }
+                socket.broadcast(msgId);
+            });
+        }
+    });
+}
 
 module.exports = {
-    regist: function (socket, msg, msgId) {
-        Client.hsetnx(RedisAccounts, msg.name, encrypt.md5(msg.name + msg.pwd), function (err, data) {
-            if (err){
-                console.log("--err:" + err);
-                socket.send(msgId, {err: err});
-                return;
-            }
-            if (data == 0){
-                socket.send(msgId, {error: "username is already exist!!"});
-                return
-            }
-            socket.__userName = msg.name;
-            socket.send(msgId, {
-                succeed: true,
-                userName: msg.name
-            });
-        });
+    add_eat: function (socket, msg, msgId) {
+        Add(EatKey, socket, msg, msgId);
     },
-    login: function (socket, msg, msgId) {
-        Client.hget(RedisAccounts, msg.name, function (err, data) {
-            if (err){
-                console.log("--err:" + err);
-                socket.send(msgId, {err: err});
-                return;
-            }
-            if (!data){
-                socket.send(msgId, {error: "username not exist!!"});
-                return
-            }
-            if (data != encrypt.md5(msg.name + msg.pwd)) {
-                socket.send(msgId, {error: "password not match!!"});
-                return
-            }
-            socket.__userName = msg.name;
-            socket.send(msgId, {
-                succeed: true,
-                userName: msg.name
-            });
-        })
+    add_diaper: function (socket, msg, msgId) {
+        Add(DiaperKey, socket, msg, msgId);
     },
-    getrooms: function (socket, msg, msgId) {
-        Client.hgetall(RedisRooms, function (err, data) {
-            if (err){
-                console.log("--err:" + err);
-                socket.send(msgId, {err: err});
-                return;
-            }
-
-            var resultData = {};
-            for (var k in data){
-                var pwd = data[k];
-                resultData[k] = {
-                    pwd: pwd,
-                    num: socket.sockets.roomDict[k] ? socket.sockets.roomDict[k].length : 0
-                };
-            }
-
-            socket.send(msgId, {
-                succeed: true,
-                data: resultData
-            });
-        });
+    del_eat: function (socket, msg, msgId) {
+        Delete(EatKey, socket, msg, msgId);
+    },
+    del_diaper: function (socket, msg, msgId) {
+        Delete(DiaperKey, socket, msg, msgId);
     },
 };
