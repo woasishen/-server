@@ -41,7 +41,30 @@ var io = require('game_socket');
 
 
 var PORT = 18080;
+for(var i=1000;i>0;i--){
+    (function() {
+        var index = i;
+        Client.lpush("cfy", index, function (err, data) {
 
+        });
+    })();
+
+}
+for(var i=0;i<1000;i++){
+    Client.lpush("cfy", -i);
+}
+Client.lrange("cfy", 0, 2000, function (err, data) {
+   for(var i = 0; i < data.length; i ++){
+       if(data[i] != -999 + i){
+           console.log(data[i]);
+       }
+   }
+   Client.del("cfy", function (err, data) {
+      console.log("finish");
+   });
+});
+
+return;
 net.createServer(function(socket) {
     //server 开始必须和client约定head长度
     socket.write(HeadLength.toString());

@@ -1,5 +1,5 @@
 require('./RedisKeys');
-
+require('./RedisCache');
 var notLoginFiles = [
     './not_need_login.js'
 ]
