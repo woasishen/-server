@@ -1,31 +1,31 @@
 require('./ConsoleLogErrorKeys');
+require('./RedisCache');
 
 function Add(cache, socket, msg, msgId){
     msg.time = Date.now();
     cache.add(msg);
     cache.stop++;
-
-    if(cache.length > CacheMaxLength){
-        var tempDelCount = CacheMaxLength - CacheDefaultLength;
-        cache.splice(0, tempDelCount);
-        cache.start = cache.start + tempDelCount;
-    }
-
-    var result = {
-        succeed: true,
+    socket.broadcast(msgId, {
         stop: cache.stop,
         data: msg
-    };
-    socket.broadcast(msgId, result);
+    });
+
+    if(cache.length > cache.MaxLength){
+        cache.TrySave(function () {
+            var tempDelCount = cache.MaxLength - cache.DefaultLength;
+            cache.splice(0, tempDelCount);
+            cache.start = cache.start + tempDelCount;
+        });
+    }
 }
 
 function Delete(cache, socket, msg, msgId){
-    if(cache.length == 0){
+    if(cache.stop == -1){
         socket.send(msgId, {error: "no msg to delete"});
         return;
     }
-    if(cache.length != msg.length){
-        socket.send(msgId, {error: "cur length not accordance"});
+    if(cache.stop != msg.stop){
+        socket.send(msgId, {error: "cur stop not accordance"});
         return;
     }
     var dataJson = json.parse(cache.last());
@@ -35,7 +35,13 @@ function Delete(cache, socket, msg, msgId){
     }
     cache.pop();
     cache.stop--;
-    socket.broadcast(msgId, cache.stop);
+    socket.broadcast(msgId, {
+        stop: cache.stop
+    });
+
+    if(cache.length < cache.MinLength && cache.start > 0){
+        cache.TryGet();
+    }
 }
 
 function Get(cache, socket, msg, msgId){
@@ -51,47 +57,16 @@ function Get(cache, socket, msg, msgId){
         return;
     }
     //无需缓存
-    if(cache.start - msg.start + cache.length > CacheMaxLength){
-        Client.lrange(cache.key, msg.start, msg.stop, function (err, data) {
-            if (err) {
-                console.log(RedisError + err);
-                socket.send(msgId, {err: err});
-                return;
-            }
-            socket.send(msgId, {
-                succeed: true,
-                data: json.parse(data)
-            });
-        });
-        return;
-    }
-
-    Client.lrange(cache.key, msg.start, Math.max(msg.stop, cache.start - 1), function (err, data) {
+    Client.lrange(cache.key, msg.start, msg.stop, function (err, data) {
         if (err) {
             console.log(RedisError + err);
-            socket.send(msgId, {err: err});
             return;
         }
-        var tempData = json.parse(data);
         socket.send(msgId, {
             succeed: true,
-            data: tempData.slice(0, msg.stop - msg.start + 1)
+            data: json.parse(data)
         });
-        if(tempData.length + msg.start < cache.start){
-            console.log(NeedFixError + "get cache no suitable");
-            return;
-        }
-        var newStart = Math.max(msg.start, cache.stop - CacheMaxLength + 1);
-        Array.prototype.unshift.apply(cache, tempData.slice(newStart - msg.start, cache.start - newStart));
     });
-
-}
-function Save() {
-    var result = {
-        succeed: true,
-        data: json.parse(data)
-    }
-    socket.send(msgId, result);
 }
 
 module.exports = {
