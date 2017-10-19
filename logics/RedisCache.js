@@ -2,112 +2,125 @@
  * Created by Administrator on 2017/10/5.
  */
 require('./RedisKeys');
+require('extensions');
 
 function TrySave(finishDel) {
+    var self = this;
     if(finishDel){
-        this.SaveDele.unshift(finishDel);
+        self.SaveDele.unshift(finishDel);
     }
-    if(this.saving){
-        this.tosave = true;
+    if(self.saving){
+        self.tosave = true;
         return;
     }
-    this.tosave = false;
-    this.saving = true;
-    this.Save();
+    self.tosave = false;
+    self.saving = true;
+    self.Save();
 }
 
 function Save() {
-    Client.llen(this.key, function (err, len) {
+    var self = this;
+    Client.llen(self.key, function (err, len) {
         if (err) {
-            console.log(RedisError + err);
-            this.SaveFinished();
+            logcfy(RedisError + err);
+            self.SaveFinished();
             return;
         }
         //same
-        if(len == this.stop + 1){
-            this.SaveFinished();
+        if(len == self.stop + 1){
+            self.SaveFinished();
             return;
         }
         //del
-        if(len > this.stop + 1){
-            Client.ltrim(this.key, len - this.stop - 1, len, function (err, data) {
+        if(len > self.stop + 1){
+            Client.ltrim(self.key, len - self.stop - 1, len, function (err, data) {
                 if (err) {
-                    console.log(RedisError + err);
+                    logcfy(RedisError + err);
                 }
-                this.SaveFinished();
+                self.SaveFinished();
             });
             return
         }
         //push
-        Client.lpush(this.key, this.slice(len - this.start), function (err, data) {
+        var pushData = [];
+        for(var i = len - self.start; i < self.length; i++){
+            pushData.push(JSON.stringify(self[i]));
+        }
+        Client.lpush(self.key, pushData, function (err, data) {
             if (err) {
-                console.log(RedisError + err);
+                logcfy(RedisError + err);
             }
-            this.SaveFinished();
+            self.SaveFinished();
         });
     });
 }
 
 function SaveFinished() {
-    this.saving = false;
-    if(this.tosave){
-        this.TrySave();
+    var self = this;
+    self.saving = false;
+    if(self.tosave){
+        self.TrySave();
     }else{
-        while(this.SaveDele.length > 0) {
-            this.SaveDele.pop()();
+        while(self.SaveDele.length > 0) {
+            self.SaveDele.pop()();
         }
     }
 }
 
 function TryGet(finishDel) {
+    var self = this;
     if(finishDel){
-        this.GetDele.unshift(finishDel);
+        self.GetDele.unshift(finishDel);
     }
-    if(this.getting){
-        this.toget = true;
+    if(self.getting){
+        self.toget = true;
         return;
     }
-    this.toget = false;
-    this.getting = true;
-    if(this.init){
-        this.save(this.Get());
+    self.toget = false;
+    self.getting = true;
+    if(self.init){
+        self.Save(self.Get());
     }else{
-        this.Get();
+        self.Get();
     }
 }
 
 function Get() {
-    Client.llen(this.key, function (err, len) {
+    var self = this;
+    Client.llen(self.key, function (err, len) {
         if (err) {
-            console.log(RedisError + err);
-            this.GetFinished();
+            logcfy(RedisError + err);
+            self.GetFinished();
             return;
         }
-        Client.lrange(this.key, len - cache.DefaultLength, len - 1, function (err, data) {
+        Client.lrange(self.key, len - self.DefaultLength, len - 1, function (err, data) {
             if (err) {
-                console.log(RedisError + err);
+                logcfy(RedisError + err);
             }
-            cache.clear();
-            var tempData = json.parse(data);
-            Array.prototype.push.apply(cache, tempData);
-            if(!this.init){
-                this.init = true;
-                console.log("cache init:");
-                console.log(cache);
+            self.clear();
+            self.start = 0;
+            self.stop = -1;
+            for(var i = 0; i < data.length; i++){
+                self.push(JSON.parse(data[i]));
+                self.stop++;
             }
-            this.GetFinished();
+            if(!self.init){
+                self.init = true;
+            }
+            self.GetFinished();
         });
 
     });
 }
 
 function GetFinished() {
-    this.getting = false;
-    if(this.toget){
-        this.TryGet();
+    var self = this;
+    self.getting = false;
+    if(self.toget){
+        self.TryGet();
     }else{
-        while(this.GetDele.length > 0){
-            this.GetDele.pop()();
+        while(self.GetDele.length > 0){
+            self.GetDele.pop()();
         }
     }
 }
@@ -130,17 +143,16 @@ function InitCache(key) {
     cache.MaxLength = 50;
     cache.DefaultLength = 45;
     cache.MinLength = 40;
-    cache.start = -1;
+    cache.start = 0;
     cache.stop = -1;
 
     cache.TryGet();
 
     setInterval(function(){
         cache.TrySave();
-    }, 60000)
+    }, 6000);
+    return cache;
 }
 
-module.exports = function () {
-    EatsCache = InitCache(EatKey);
-    DiapersCache = InitCache(DiaperKey);
-};
+EatsCache = InitCache(EatKey);
+DiapersCache = InitCache(DiaperKey);

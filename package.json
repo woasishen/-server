@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node server.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "node-windows": "^0.1.14"
+  },
   "description": "",
   "main": "server.js",
   "devDependencies": {},

@@ -3,8 +3,11 @@ require('./RedisCache');
 
 function Add(cache, socket, msg, msgId){
     msg.time = Date.now();
-    cache.add(msg);
+    cache.push(msg);
     cache.stop++;
+    socket.send(msgId, {
+        succeed: true
+    });
     socket.broadcast(msgId, {
         stop: cache.stop,
         data: msg
@@ -28,13 +31,15 @@ function Delete(cache, socket, msg, msgId){
         socket.send(msgId, {error: "cur stop not accordance"});
         return;
     }
-    var dataJson = json.parse(cache.last());
-    if (Date.now() - dataJson.time > DeleteLimitTime * 1000){
+    if (Date.now() - cache.last().time > DeleteLimitTime * 1000){
         socket.send(msgId, {error: "delete can only execute in " + DeleteLimitTime + " seconds"});
         return;
     }
     cache.pop();
     cache.stop--;
+    socket.send(msgId, {
+        succeed: true
+    });
     socket.broadcast(msgId, {
         stop: cache.stop
     });
@@ -53,18 +58,23 @@ function Get(cache, socket, msg, msgId){
     if(msg.start >= cache.start){
         var tempSliceStart = msg.start - cache.start;
         var tempSliceLength = msg.stop - msg.start + 1;
-        socket.send(msgId, cache.slice(tempSliceStart, tempSliceStart + tempSliceLength));
+        socket.send(msgId, {
+            succeed: true,
+            start: msg.start,
+            data:cache.slice(tempSliceStart, tempSliceStart + tempSliceLength)
+        });
         return;
     }
     //无需缓存
     Client.lrange(cache.key, msg.start, msg.stop, function (err, data) {
         if (err) {
-            console.log(RedisError + err);
+            logcfy(RedisError + err);
             return;
         }
         socket.send(msgId, {
             succeed: true,
-            data: json.parse(data)
+            start: msg.start,
+            data: JSON.parse(data)
         });
     });
 }
